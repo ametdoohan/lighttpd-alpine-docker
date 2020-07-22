@@ -1,4 +1,4 @@
-## Docker image alpine with lighttpd web server (only 14MB)
+## Docker image alpine with lighttpd web server
 
 ### to pull:
 
