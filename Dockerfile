@@ -1,8 +1,8 @@
-FROM alpine:latest
+FROM alpine:3.12.0
 
 MAINTAINER amet doohan <ametdoohan@live.com>
 
-LABEL version="1.0"
+LABEL version="1.1"
 LABEL description="lighttpd running on port 80"
 
 EXPOSE 80
