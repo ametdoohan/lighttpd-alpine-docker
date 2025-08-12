@@ -1,0 +1,23 @@
+# Scan results
+scan-results/
+trivy-results.json
+trivy-results.sarif
+scan-summary.md
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
