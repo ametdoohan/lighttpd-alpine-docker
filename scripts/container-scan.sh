@@ -116,13 +116,21 @@ run_scan() {
     
     # Run scan with different formats
     print_status "Generating table format report..."
-    trivy image --severity "$SEVERITY_LEVELS" --format table "$IMAGE_NAME" | tee "$OUTPUT_DIR/scan-table.txt"
+    if ! trivy image --severity "$SEVERITY_LEVELS" --format table "$IMAGE_NAME" | tee "$OUTPUT_DIR/scan-table.txt"; then
+        print_error "Failed to generate table format report"
+        return 1
+    fi
     
     print_status "Generating JSON format report..."
-    trivy image --severity "CRITICAL,HIGH,MEDIUM,LOW" --format json --output "$OUTPUT_DIR/scan-results.json" "$IMAGE_NAME"
+    if ! trivy image --severity "CRITICAL,HIGH,MEDIUM,LOW" --format json --output "$OUTPUT_DIR/scan-results.json" "$IMAGE_NAME"; then
+        print_error "Failed to generate JSON format report"
+        return 1
+    fi
     
     print_status "Generating HTML format report..."
-    trivy image --severity "CRITICAL,HIGH,MEDIUM,LOW" --format template --template "@contrib/html.tpl" --output "$OUTPUT_DIR/scan-report.html" "$IMAGE_NAME" 2>/dev/null || print_warning "HTML report generation failed (template not found)"
+    if ! trivy image --severity "CRITICAL,HIGH,MEDIUM,LOW" --format template --template "@contrib/html.tpl" --output "$OUTPUT_DIR/scan-report.html" "$IMAGE_NAME" 2>/dev/null; then
+        print_warning "HTML report generation failed (template not found or network issues)"
+    fi
     
     print_success "Vulnerability scan completed"
 }
