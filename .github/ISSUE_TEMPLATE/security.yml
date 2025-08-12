@@ -1,0 +1,71 @@
+name: Security Vulnerability Report
+description: Report a security vulnerability found in the container
+title: "[SECURITY] "
+labels: ["security", "vulnerability"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a security vulnerability!
+
+  - type: input
+    id: vulnerability-type
+    attributes:
+      label: Vulnerability Type
+      description: What type of vulnerability did you find?
+      placeholder: ex. CVE-2023-1234, dependency vulnerability, etc.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity Level
+      description: How severe is this vulnerability?
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Vulnerability Description
+      description: Detailed description of the vulnerability
+      placeholder: Describe the vulnerability, its impact, and how it can be exploited
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-components
+    attributes:
+      label: Affected Components
+      description: Which components are affected?
+      placeholder: ex. Alpine base image, lighttpd package, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can this vulnerability be reproduced?
+      placeholder: |
+        1. Build the container
+        2. Run specific commands
+        3. Observe the vulnerability
+    validations:
+      required: false
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Mitigation
+      description: Do you have suggestions for fixing this vulnerability?
+      placeholder: Update dependencies, configuration changes, etc.
+    validations:
+      required: false
