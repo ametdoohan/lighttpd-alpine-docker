@@ -1,6 +1,6 @@
-FROM alpine:3.12.0
+FROM alpine:3.19
 
-MAINTAINER amet doohan <ametdoohan@live.com>
+LABEL maintainer="amet doohan <ametdoohan@live.com>"
 
 LABEL version="1.1"
 LABEL description="lighttpd running on port 80"
