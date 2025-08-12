@@ -36,6 +36,7 @@ trivy image lighttpd-alpine:test
 
 ### Security Best Practices
 
+- **Updated Base Image**: Uses Alpine 3.19 (updated from 3.12.0) to reduce known vulnerabilities
 - Regular base image updates
 - Minimal attack surface (Alpine Linux)
 - Non-root user execution
