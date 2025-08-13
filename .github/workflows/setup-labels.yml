@@ -1,0 +1,73 @@
+name: Setup Security Labels
+
+on:
+  workflow_dispatch:
+  # Run once when repository is setup
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/setup-labels.yml'
+
+jobs:
+  setup-labels:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Create security labels
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const labels = [
+            {
+              name: 'security-clean',
+              color: '0e8a16',
+              description: '✅ No security vulnerabilities detected'
+            },
+            {
+              name: 'security-review',
+              color: 'fbca04',
+              description: '⚠️ Medium severity vulnerabilities - review recommended'
+            },
+            {
+              name: 'security-risk',
+              color: 'd73a49',
+              description: '🚨 Critical or high severity vulnerabilities found'
+            },
+            {
+              name: 'security-error',
+              color: '6f42c1',
+              description: '💥 Security scan failed - needs investigation'
+            }
+          ];
+          
+          for (const label of labels) {
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label.name,
+                color: label.color,
+                description: label.description
+              });
+              console.log(`Created label: ${label.name}`);
+            } catch (error) {
+              if (error.status === 422) {
+                console.log(`Label ${label.name} already exists`);
+                // Update existing label
+                try {
+                  await github.rest.issues.updateLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label.name,
+                    color: label.color,
+                    description: label.description
+                  });
+                  console.log(`Updated label: ${label.name}`);
+                } catch (updateError) {
+                  console.log(`Failed to update label ${label.name}:`, updateError.message);
+                }
+              } else {
+                console.log(`Failed to create label ${label.name}:`, error.message);
+              }
+            }
+          }

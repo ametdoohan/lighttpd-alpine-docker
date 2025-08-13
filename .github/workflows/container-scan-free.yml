@@ -9,6 +9,14 @@ on:
     # Run weekly security scans
     - cron: '0 0 * * 0'
 
+# Add permissions for enhanced PR integration
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+  checks: write
+
 jobs:
   security-scan:
     runs-on: ubuntu-latest
@@ -16,6 +24,22 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      
+    # Set initial status check for PR
+    - name: Set initial scan status
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: context.payload.pull_request.head.sha,
+            state: 'pending',
+            target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            description: 'Container vulnerability scan in progress...',
+            context: 'security/container-scan'
+          });
       
     - name: Build Docker image
       run: |
@@ -51,30 +75,85 @@ jobs:
           echo "MEDIUM_COUNT=$MEDIUM" >> $GITHUB_OUTPUT
           echo "LOW_COUNT=$LOW" >> $GITHUB_OUTPUT
           
-          # Create summary for PR comment
-          echo "## Container Vulnerability Scan Results" > scan-summary.md
-          echo "" >> scan-summary.md
-          echo "| Severity | Count |" >> scan-summary.md
-          echo "|----------|-------|" >> scan-summary.md
-          echo "| Critical | $CRITICAL |" >> scan-summary.md
-          echo "| High | $HIGH |" >> scan-summary.md
-          echo "| Medium | $MEDIUM |" >> scan-summary.md
-          echo "| Low | $LOW |" >> scan-summary.md
+          # Create enhanced summary for PR comment
+          echo "## 🔒 Container Vulnerability Scan Results" > scan-summary.md
           echo "" >> scan-summary.md
           
-          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "❌ **Security scan failed**: Found $CRITICAL critical and $HIGH high severity vulnerabilities" >> scan-summary.md
-            echo "SCAN_STATUS=failed" >> $GITHUB_OUTPUT
+          # Add scan metadata
+          echo "**📦 Image:** \`lighttpd-alpine:test\`" >> scan-summary.md
+          echo "**🔍 Scanner:** Trivy $(trivy --version | grep -o 'v[0-9.]*' || echo 'latest')" >> scan-summary.md
+          echo "**📅 Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> scan-summary.md
+          echo "" >> scan-summary.md
+          
+          # Enhanced vulnerability table with visual indicators
+          echo "### 📊 Vulnerability Summary" >> scan-summary.md
+          echo "" >> scan-summary.md
+          echo "| Severity | Count | Status |" >> scan-summary.md
+          echo "|----------|-------|--------|" >> scan-summary.md
+          
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "| 🔴 Critical | **$CRITICAL** | ⚠️ Action Required |" >> scan-summary.md
           else
-            echo "✅ **Security scan passed**: No critical or high severity vulnerabilities found" >> scan-summary.md
+            echo "| 🔴 Critical | $CRITICAL | ✅ Clean |" >> scan-summary.md
+          fi
+          
+          if [ "$HIGH" -gt 0 ]; then
+            echo "| 🟠 High | **$HIGH** | ⚠️ Action Required |" >> scan-summary.md
+          else
+            echo "| 🟠 High | $HIGH | ✅ Clean |" >> scan-summary.md
+          fi
+          
+          if [ "$MEDIUM" -gt 0 ]; then
+            echo "| 🟡 Medium | $MEDIUM | ⚡ Review Recommended |" >> scan-summary.md
+          else
+            echo "| 🟡 Medium | $MEDIUM | ✅ Clean |" >> scan-summary.md
+          fi
+          
+          echo "| 🔵 Low | $LOW | ℹ️ Informational |" >> scan-summary.md
+          echo "" >> scan-summary.md
+          
+          # Overall status with enhanced messaging
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "### ❌ Security Scan Failed" >> scan-summary.md
+            echo "" >> scan-summary.md
+            echo "**Issues Found:** $CRITICAL critical and $HIGH high severity vulnerabilities" >> scan-summary.md
+            echo "" >> scan-summary.md
+            echo "🚨 **This PR cannot be merged safely** until critical and high severity vulnerabilities are addressed." >> scan-summary.md
+            echo "" >> scan-summary.md
+            echo "#### 🛠️ Recommended Actions:" >> scan-summary.md
+            echo "1. **Review detailed scan results** in the workflow artifacts" >> scan-summary.md
+            echo "2. **Update base image** to latest version if possible" >> scan-summary.md
+            echo "3. **Apply security patches** for identified vulnerabilities" >> scan-summary.md
+            echo "4. **Consider alternative packages** if vulnerabilities cannot be patched" >> scan-summary.md
+            echo "SCAN_STATUS=failed" >> $GITHUB_OUTPUT
+            echo "PR_LABEL=security-risk" >> $GITHUB_OUTPUT
+          elif [ "$MEDIUM" -gt 0 ]; then
+            echo "### ⚠️ Security Scan Passed with Warnings" >> scan-summary.md
+            echo "" >> scan-summary.md
+            echo "**No critical or high severity vulnerabilities found!** ✅" >> scan-summary.md
+            echo "" >> scan-summary.md
+            echo "However, $MEDIUM medium severity vulnerabilities were detected. Consider addressing these during development." >> scan-summary.md
+            echo "SCAN_STATUS=warning" >> $GITHUB_OUTPUT
+            echo "PR_LABEL=security-review" >> $GITHUB_OUTPUT
+          else
+            echo "### ✅ Security Scan Passed" >> scan-summary.md
+            echo "" >> scan-summary.md
+            echo "**Excellent!** No critical, high, or medium severity vulnerabilities found. This container is ready for deployment." >> scan-summary.md
             echo "SCAN_STATUS=passed" >> $GITHUB_OUTPUT
+            echo "PR_LABEL=security-clean" >> $GITHUB_OUTPUT
           fi
           
           echo "" >> scan-summary.md
-          echo "📋 Full scan results are available as workflow artifacts." >> scan-summary.md
+          echo "### 📋 Additional Resources" >> scan-summary.md
+          echo "" >> scan-summary.md
+          echo "- 📥 **[Download detailed scan results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})** (Workflow artifacts)" >> scan-summary.md
+          echo "- 🔍 **[View scan logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})** (Workflow run)" >> scan-summary.md
+          echo "- 📚 **[Security Guidelines](../blob/main/SECURITY.md)** (Project security practices)" >> scan-summary.md
+          echo "- 🛡️ **[Trivy Documentation](https://aquasecurity.github.io/trivy/)** (Scanner documentation)" >> scan-summary.md
         else
           echo "❌ **Security scan failed**: Could not generate scan results" > scan-summary.md
           echo "SCAN_STATUS=error" >> $GITHUB_OUTPUT
+          echo "PR_LABEL=security-error" >> $GITHUB_OUTPUT
         fi
         
     - name: Upload scan results as artifacts
@@ -86,6 +165,43 @@ jobs:
           trivy-results.json
           scan-summary.md
         retention-days: 30
+        
+    # Add PR labels based on scan results
+    - name: Label PR based on scan results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const labelToAdd = '${{ steps.parse-results.outputs.PR_LABEL }}';
+          const labelsToRemove = ['security-clean', 'security-review', 'security-risk', 'security-error'];
+          
+          try {
+            // Remove existing security labels
+            for (const label of labelsToRemove) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: label
+                });
+              } catch (error) {
+                // Label doesn't exist, continue
+              }
+            }
+            
+            // Add new label
+            if (labelToAdd) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: [labelToAdd]
+              });
+            }
+          } catch (error) {
+            console.log('Error managing labels:', error.message);
+          }
         
     - name: Comment scan results on PR
       if: github.event_name == 'pull_request'
@@ -109,9 +225,37 @@ jobs:
               comment.body.includes('Container Vulnerability Scan Results')
             );
             
-            const commentBody = `${summary}
+            // Create remediation section
+            const remediationSection = [
+              '',
+              '<details>',
+              '<summary>🔧 <strong>How to resolve vulnerabilities</strong></summary>',
+              '',
+              '### General Remediation Steps:',
+              '1. **Update Base Image**: Try updating to the latest Alpine version in your Dockerfile',
+              '2. **Package Updates**: Update packages to their latest secure versions',
+              '3. **Alternative Images**: Consider using distroless or minimal base images',
+              '4. **Layer Optimization**: Minimize the number of installed packages',
+              '',
+              '### Useful Commands:',
+              '```bash',
+              '# Check for updated Alpine versions',
+              'docker pull alpine:latest',
+              '',
+              '# Scan locally before pushing',
+              './scripts/container-scan.sh --install-trivy',
+              '',
+              '# View detailed vulnerability information',
+              'trivy image --format json lighttpd-alpine:test | jq \'.Results[].Vulnerabilities[]\'',
+              '```',
+              '',
+              '</details>'
+            ].join('\\n');
             
-_Scan performed by GitHub Actions at ${new Date().toISOString()}_`;
+            const timestamp = new Date().toISOString();
+            const workflowUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            
+            const commentBody = summary + remediationSection + `\\n\\n---\\n_🤖 Automated scan by GitHub Actions • [View Workflow Run](${workflowUrl}) • Scan completed at ${timestamp}_`;
             
             if (existingComment) {
               // Update existing comment
@@ -133,6 +277,45 @@ _Scan performed by GitHub Actions at ${new Date().toISOString()}_`;
           } catch (error) {
             console.error('Error posting comment:', error);
           }
+        
+    # Update final status check for PR
+    - name: Update scan status check
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const scanStatus = '${{ steps.parse-results.outputs.SCAN_STATUS }}';
+          let state, description;
+          
+          switch (scanStatus) {
+            case 'passed':
+              state = 'success';
+              description = '✅ No critical or high vulnerabilities found';
+              break;
+            case 'warning':
+              state = 'success';
+              description = '⚠️ Medium vulnerabilities found - review recommended';
+              break;
+            case 'failed':
+              state = 'failure';
+              description = '❌ Critical or high vulnerabilities found';
+              break;
+            case 'error':
+            default:
+              state = 'error';
+              description = '💥 Scan failed - check workflow logs';
+              break;
+          }
+          
+          await github.rest.repos.createCommitStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            sha: context.payload.pull_request.head.sha,
+            state: state,
+            target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            description: description,
+            context: 'security/container-scan'
+          });
         
     - name: Fail build on critical/high vulnerabilities
       if: steps.parse-results.outputs.SCAN_STATUS == 'failed'
