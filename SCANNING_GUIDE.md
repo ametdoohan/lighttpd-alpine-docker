@@ -1,35 +1,75 @@
-# Container Scanning Usage Guide
+# Container Scanning Usage Guide (Enhanced PR Integration)
 
-This guide explains how to access and use container vulnerability scan results with the free GitHub edition.
+This guide explains how to access and use container vulnerability scan results with the enhanced free GitHub edition that provides rich pull request integration.
 
-## How Container Scanning Works (Free Edition)
+## How Enhanced Container Scanning Works
 
-### 1. Automated Scanning
-The `container-scan-free.yml` workflow runs automatically:
-- **On Pull Requests**: Scans your changes and posts results as comments
-- **On Main Branch Pushes**: Scans the latest code
-- **Weekly Schedule**: Runs every Sunday at midnight UTC
+### 1. Automated Scanning with PR Integration
+The enhanced `container-scan-free.yml` workflow provides comprehensive PR integration:
+- **On Pull Requests**: 
+  - Sets initial "pending" status check
+  - Scans container and posts rich formatted results as comments
+  - Updates status checks with scan results (success/failure/warning)
+  - Automatically labels PR based on vulnerability severity
+  - Provides remediation guidance and next steps
+- **On Main Branch Pushes**: Scans the latest code for monitoring
+- **Weekly Schedule**: Runs every Sunday at midnight UTC for continuous monitoring
 
-### 2. Viewing Scan Results
+### 2. Enhanced PR Experience
 
-#### Option 1: Pull Request Comments
-When you create a PR, you'll see an automated comment with a summary like:
+#### Status Checks Integration 🔄
+- **Real-time status**: See scan progress directly in the PR interface
+- **Clear indicators**: Success ✅, Warning ⚠️, or Failure ❌ status
+- **Direct links**: Click status to view detailed workflow results
+
+#### Automatic PR Labels 🏷️
+PRs are automatically labeled based on scan results:
+- 🟢 `security-clean` - No security vulnerabilities detected
+- 🟡 `security-review` - Medium severity vulnerabilities (review recommended)
+- 🔴 `security-risk` - Critical or high severity vulnerabilities found
+- 🟣 `security-error` - Security scan failed (needs investigation)
+
+#### Enhanced PR Comments 💬
+Rich formatted comments include:
+- **Visual vulnerability summary** with emojis and severity indicators
+- **Scanner metadata** (version, scan date, image details)
+- **Actionable guidance** for resolving vulnerabilities
+- **Collapsible remediation section** with step-by-step instructions
+- **Direct links** to artifacts, logs, and documentation
+
+### 2. Viewing Enhanced Scan Results
+
+#### Option 1: PR Status Checks and Labels (NEW! ✨)
+- **Status Checks**: View scan status directly in the PR interface near the merge button
+- **Labels**: Check PR labels for quick vulnerability assessment
+- **Real-time Updates**: Status updates as the scan progresses
+
+#### Option 2: Enhanced PR Comments (IMPROVED! 🎨)
+When you create a PR, you'll see a rich formatted comment with:
 ```
-## Container Vulnerability Scan Results
+## 🔒 Container Vulnerability Scan Results
 
-| Severity | Count |
-|----------|-------|
-| Critical | 0     |
-| High     | 2     |
-| Medium   | 5     |
-| Low      | 10    |
+📦 Image: `lighttpd-alpine:test`
+🔍 Scanner: Trivy v0.45.0
+📅 Scan Date: 2024-01-15 10:30:00 UTC
 
-❌ **Security scan failed**: Found 0 critical and 2 high severity vulnerabilities
+### 📊 Vulnerability Summary
 
-📋 Full scan results are available as workflow artifacts.
+| Severity | Count | Status |
+|----------|-------|--------|
+| 🔴 Critical | 0 | ✅ Clean |
+| 🟠 High | 2 | ⚠️ Action Required |
+| 🟡 Medium | 5 | ⚡ Review Recommended |
+| 🔵 Low | 10 | ℹ️ Informational |
+
+### ⚠️ Security Scan Passed with Warnings
+
+No critical or high severity vulnerabilities found! ✅
+
+However, 5 medium severity vulnerabilities were detected...
 ```
 
-#### Option 2: Workflow Artifacts
+#### Option 3: Workflow Artifacts (Enhanced! 📦)
 1. Go to the **Actions** tab in your GitHub repository
 2. Click on the latest "Container Security Scan (Free Edition)" workflow run
 3. Scroll down to the **Artifacts** section
