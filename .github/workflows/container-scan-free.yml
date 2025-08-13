@@ -1,0 +1,143 @@
+name: Container Security Scan (Free Edition)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run weekly security scans
+    - cron: '0 0 * * 0'
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build Docker image
+      run: |
+        docker build -t lighttpd-alpine:test .
+        
+    - name: Run Trivy vulnerability scanner (JSON output)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'lighttpd-alpine:test'
+        format: 'json'
+        output: 'trivy-results.json'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+        
+    - name: Run Trivy vulnerability scanner (table format for logs)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'lighttpd-alpine:test'
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        
+    - name: Parse vulnerability results
+      id: parse-results
+      run: |
+        if [ -f trivy-results.json ]; then
+          # Count vulnerabilities by severity
+          CRITICAL=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' trivy-results.json 2>/dev/null | wc -l || echo "0")
+          HIGH=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' trivy-results.json 2>/dev/null | wc -l || echo "0")
+          MEDIUM=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM") | .VulnerabilityID' trivy-results.json 2>/dev/null | wc -l || echo "0")
+          LOW=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW") | .VulnerabilityID' trivy-results.json 2>/dev/null | wc -l || echo "0")
+          
+          echo "CRITICAL_COUNT=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "HIGH_COUNT=$HIGH" >> $GITHUB_OUTPUT
+          echo "MEDIUM_COUNT=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "LOW_COUNT=$LOW" >> $GITHUB_OUTPUT
+          
+          # Create summary for PR comment
+          echo "## Container Vulnerability Scan Results" > scan-summary.md
+          echo "" >> scan-summary.md
+          echo "| Severity | Count |" >> scan-summary.md
+          echo "|----------|-------|" >> scan-summary.md
+          echo "| Critical | $CRITICAL |" >> scan-summary.md
+          echo "| High | $HIGH |" >> scan-summary.md
+          echo "| Medium | $MEDIUM |" >> scan-summary.md
+          echo "| Low | $LOW |" >> scan-summary.md
+          echo "" >> scan-summary.md
+          
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "❌ **Security scan failed**: Found $CRITICAL critical and $HIGH high severity vulnerabilities" >> scan-summary.md
+            echo "SCAN_STATUS=failed" >> $GITHUB_OUTPUT
+          else
+            echo "✅ **Security scan passed**: No critical or high severity vulnerabilities found" >> scan-summary.md
+            echo "SCAN_STATUS=passed" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "" >> scan-summary.md
+          echo "📋 Full scan results are available as workflow artifacts." >> scan-summary.md
+        else
+          echo "❌ **Security scan failed**: Could not generate scan results" > scan-summary.md
+          echo "SCAN_STATUS=error" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Upload scan results as artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: trivy-scan-results-${{ github.run_id }}
+        path: |
+          trivy-results.json
+          scan-summary.md
+        retention-days: 30
+        
+    - name: Comment scan results on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const summary = fs.readFileSync('scan-summary.md', 'utf8');
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.user.login === 'github-actions[bot]' && 
+              comment.body.includes('Container Vulnerability Scan Results')
+            );
+            
+            const commentBody = `${summary}
+            
+_Scan performed by GitHub Actions at ${new Date().toISOString()}_`;
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: commentBody
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+          } catch (error) {
+            console.error('Error posting comment:', error);
+          }
+        
+    - name: Fail build on critical/high vulnerabilities
+      if: steps.parse-results.outputs.SCAN_STATUS == 'failed'
+      run: |
+        echo "Build failed due to critical or high severity vulnerabilities"
+        echo "Critical: ${{ steps.parse-results.outputs.CRITICAL_COUNT }}"
+        echo "High: ${{ steps.parse-results.outputs.HIGH_COUNT }}"
+        exit 1
